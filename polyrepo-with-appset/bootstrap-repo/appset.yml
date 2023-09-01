@@ -1,0 +1,44 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: appset-with-matrix-generator
+spec:
+  generators:
+    - matrix:
+        generators:
+          # First Generator is Git - File
+          # Generate an entry foreach file it found in the main repo
+          - git:
+              repoURL: https://github.com/saiello/gitops-samples.git
+              revision: HEAD
+              files:
+                - path: "polyrepo-with-appset/config-repo/*/*.json"
+              pathParamPrefix: repoConfig
+          # Second Generator is Git - directory
+          # Generate an app foreach directory it found in the repoURL resolved by the first generator
+          - git:
+              repoURL: '{{ repoURL }}'
+              revision: HEAD
+              directories:
+                - path: "polyrepo-with-appset/repos/{{ basePath }}/*"  # repo/system-x-dev/*    This can be hardcoded when respository will be splitted
+              pathParamPrefix: app
+
+
+  template:
+    metadata:
+      name: '{{ app.path[2] }}-{{ app.path.basenameNormalized }}'  # system-x-dev-app-a
+    spec:
+      project: default    #  {{ app.path[1] }}  system-x-dev
+      source:
+        repoURL: '{{ repoURL }}'
+        targetRevision: HEAD
+        path: '{{ app.path }}' # repos/system-x-dev/app-a
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{ app.path[2] }}'  # system-x-dev
+      syncPolicy:
+        syncOptions:
+        - CreateNamespace=true
+        automated:
+            prune: true
+            selfHeal: true
