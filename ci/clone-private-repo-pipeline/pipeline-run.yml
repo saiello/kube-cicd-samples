@@ -1,0 +1,27 @@
+apiVersion: tekton.dev/v1beta1
+kind: PipelineRun
+metadata:
+  generateName: private-clone-read-run-
+spec:
+  pipelineRef:
+    name: private-clone-read
+  # podTemplate:
+  #   securityContext:
+  #     fsGroup: 65532
+  #     runAsNonRoot: true
+  workspaces:
+  - name: repo-basic-auth
+    secret: 
+      secretName: git-basic-auth-secret
+
+  - name: shared-data
+    volumeClaimTemplate:
+      spec:
+        accessModes:
+        - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi
+  params:
+  - name: repo-url
+    value:  https://gitlab.private.repo.com/saiello/sample-app

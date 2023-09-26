@@ -1,0 +1,13 @@
+---
+apiVersion: triggers.tekton.dev/v1alpha1
+kind: EventListener
+metadata:
+  name: gitlab-event-listener
+  namespace: {{ .Values.tektonNamespace }}
+spec:
+  triggers:
+  - name: gitea-pipeline
+    bindings:
+    - ref: gitlab-binding
+    template:
+      ref: vote-app-api-pipeline

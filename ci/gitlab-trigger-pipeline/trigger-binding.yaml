@@ -1,0 +1,15 @@
+---
+apiVersion: triggers.tekton.dev/v1alpha1
+kind: TriggerBinding
+metadata:
+  name: gitlab-binding
+  namespace: {{ .Values.tektonNamespace }}
+spec:
+  # see: https://gitlab.com/help/user/project/integrations/webhook_events.md#push-events
+  params:
+  - name: git-repo-url
+    value: $(body.repository.git_http_url)
+  - name: git-revision
+    value: $(body.after)
+
+
