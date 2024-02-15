@@ -1,0 +1,121 @@
+---
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: gitlab-pipeline
+spec:
+  description: | 
+    This pipeline clones a git repo, then echoes the README file to the stdout.
+  # A list of parameters to be used by the Tasks in this Pipeline
+  params:
+
+  - name: ocp-base-url
+    type: string
+    description: |
+      Openshift base url used to compose the Tekton pipelineRun url
+
+
+  - name: gitlab-base-url
+    type: string
+    description: |
+      Gitlab base url used to invoke the update-status api
+
+
+  - name: repo-revision
+    type: string
+    description: |
+      The git commit sha to set the status to.
+
+
+  - name: gitlab-project-id
+    type: string
+    description: |
+      The gitlab project id to set the status to. 
+
+
+  # A shared volume used by the Tasks to store the code
+  workspaces:
+    
+  - name: gitlab-creds
+    description: | 
+      This workspace contains the token used to authenticate to Gitlab api.
+  
+  tasks:
+
+  - name: set-gitlab-pipeline-running
+    taskRef:
+      name: gitlab-pipeline-status
+    workspaces:
+    - name: gitlab-token
+      workspace: gitlab-creds
+    params:
+      - name: ocp-base-url
+        value: $(params.ocp-base-url)
+
+      - name: gitlab-base-url
+        value: $(params.gitlab-base-url) 
+
+      - name: gitlab-sha
+        value: $(params.repo-revision)
+
+      - name: gitlab-project-id
+        value: $(params.gitlab-project-id) 
+      
+      - name: gitlab-state
+        value: running
+      
+      - name: pipeline-name
+        value: "$(context.pipeline.name)"
+
+      - name: pipeline-run-name
+        value: "$(context.pipelineRun.name)" 
+
+      - name: pipeline-run-namespace
+        value: "$(context.pipelineRun.namespace)"
+
+
+  - name: dummy 
+    runAfter:
+      - "set-gitlab-pipeline-running"
+    taskSpec:
+        steps:
+          - name: sleep
+            image: registry.redhat.io/ubi9/toolbox
+            script: |
+              echo "Execute pipeline"
+              sleep 20
+
+
+  finally:
+    - name: set-gitlab-pipeline-final
+      taskRef:
+        name: gitlab-pipeline-status
+      workspaces:
+        - name: gitlab-token
+          workspace: gitlab-creds    
+      params:
+        - name: ocp-base-url
+          value: $(params.ocp-base-url)
+
+        - name: gitlab-base-url
+          value: $(params.gitlab-base-url) 
+
+        - name: gitlab-sha
+          value: $(params.repo-revision)
+
+        - name: gitlab-project-id
+          value: $(params.gitlab-project-id)
+      
+        - name: gitlab-state
+          value: $(tasks.status)
+
+        - name: pipeline-name
+          value: "$(context.pipeline.name)"
+
+        - name: pipeline-run-name
+          value: "$(context.pipelineRun.name)" 
+
+        - name: pipeline-run-namespace
+          value: "$(context.pipelineRun.namespace)"           
+
+

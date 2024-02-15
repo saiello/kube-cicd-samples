@@ -1,0 +1,39 @@
+---
+apiVersion: triggers.tekton.dev/v1alpha1
+kind: TriggerTemplate
+metadata:
+  name: gitlab-trigger-pipeline
+spec:
+  params:
+  - name: git-repo-url
+  - name: git-repo-revision
+  - name: gitlab-base-url
+  - name: gitlab-project-id
+  - name: gitlab-project-name
+  resourcetemplates:
+  - apiVersion: tekton.dev/v1beta1
+    kind: PipelineRun
+    metadata:
+      generateName: gitlab-pipeline-run-
+    spec:
+      pipelineRef:
+        name: gitlab-pipeline
+      workspaces:
+
+      - name: gitlab-creds
+        secret:
+          secretName: gitlab-api-token
+
+      params:
+      - name: ocp-base-url
+        value: ${OCP_BASE_URL}
+      - name: repo-url
+        value: $(tt.params.git-repo-url) 
+      - name: repo-revision 
+        value: $(tt.params.git-repo-revision)
+      - name: gitlab-base-url
+        value: ${GITLAB_REPO_URL_HERE}
+      - name: gitlab-project-id
+        value: $(tt.params.gitlab-project-id)
+      - name: gitlab-project-name
+        value: $(tt.params.gitlab-project-name)

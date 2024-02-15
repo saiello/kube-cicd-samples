@@ -1,0 +1,126 @@
+---
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: gitlab-pipeline-status
+  labels:
+    app.kubernetes.io/version: "0.3"
+  annotations:
+    tekton.dev/pipelines.minVersion: "0.17.0"
+    tekton.dev/categories: Build Tools
+    tekton.dev/tags: build-tool
+    tekton.dev/platforms: "linux/amd64,linux/s390x,linux/ppc64le"
+spec:
+  description: >-
+    This Task can be used to update a gitlab pipeline status
+
+  workspaces:
+    - name: gitlab-token
+      description: A gitlab token with api access
+  params:
+    - name: gitlab-base-url
+      description: The gitlab base url
+
+    - name: gitlab-sha
+      description: The commit sha to be updated
+
+    - name: gitlab-project-id
+      description: The gitlab project id
+
+    - name: gitlab-state
+      description: The gitlab pipeline's state to set.
+
+    - name: ocp-base-url
+      default: tbc
+
+    - name: pipeline-name
+      description: tbc
+
+    - name: pipeline-run-name
+      description: tbc
+
+    - name: pipeline-run-namespace
+      description: tbc
+
+    - name: IMAGE
+      type: string
+      description: Base image
+      default: registry.access.redhat.com/ubi8/ubi-minimal:8.2
+
+  steps:
+    - name: gitlab-pipeline-status
+      image: $(params.IMAGE)
+      env:
+        - name: PARAM_VERBOSE
+          value: "false"
+      script: |
+        #!/usr/bin/env bash
+
+        set -eu 
+
+        if [ "${PARAM_VERBOSE}" = "true" ] ; then
+          set -x
+        fi
+
+        # Mapping the tekton status to gitlab state.
+        #
+        # Tekton
+        # ----
+        # Succeeded	all tasks have succeeded
+        # Failed	one ore more tasks failed
+        # Completed	all tasks completed successfully including one or more skipped tasks
+        # None
+
+        # Gitlab
+        # -----
+        # The state of the status. Can be one of the following: pending, running, success, failed, canceled
+        #
+        # https://tekton.dev/docs/pipelines/pipelines/#using-execution-status-of-pipelinetask
+        function get_gitlab_state {
+
+          local input_state=$1
+
+          if [ $input_state = "Succeeded" ]; then
+            echo "success"
+          elif [ $input_state = "Completed" ]; then
+            echo "success"
+          elif [ $input_state = "Failed" ]; then
+            echo "failed"
+          elif [ $input_state = "None" ]; then
+            # we are assuming the pipeline is still running
+            echo "running"
+          else 
+            # the state passed is a literal state. Should be a gitlab state
+            echo $input_state
+          fi
+
+        }
+
+        
+    
+        # This task uses some tekton variables:
+        # - Context Variables. see: https://tekton.dev/docs/pipelines/variables/
+        # - Aggregate execution status. see: https://tekton.dev/docs/pipelines/pipelines/#using-aggregate-execution-status-of-all-tasks
+
+
+        # Collect variables
+        gitlab_url=$(params.gitlab-base-url)/api/v4/projects/$(params.gitlab-project-id)/statuses/$(params.gitlab-sha)
+        gitlab_token=`cat $(workspaces.gitlab-token.path)/token`
+        pipeline_name=$(params.pipeline-name)
+        pipeline_run_url=$(params.ocp-base-url)/$(params.pipeline-run-namespace)/tekton.dev\~v1beta1\~PipelineRun/$(params.pipeline-run-name)
+        pipeline_state=$(get_gitlab_state $(params.gitlab-state))
+        # pipeline_task_description="foobar" # TBD
+
+        # Compose curl command
+        # --url-query supported only since curl 7.87.0
+        gitlab_curl_command="curl -v --request POST $gitlab_url \
+            --header \"PRIVATE-TOKEN: $gitlab_token\" \
+            --data-urlencode name=tekton-${pipeline_name} \
+            --data-urlencode state=$pipeline_state \
+            --data-urlencode target_url=$pipeline_run_url"
+            # --data-urlencode description=$pipeline_task_description"
+            
+        echo $gitlab_curl_command
+
+        # Eval curl command
+        eval $gitlab_curl_command

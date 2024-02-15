@@ -1,0 +1,13 @@
+---
+apiVersion: triggers.tekton.dev/v1alpha1
+kind: EventListener
+metadata:
+  name: gitlab-event-listener
+spec:
+  triggers:
+  
+  - name: gitlab-pipeline
+    bindings:
+    - ref: gitlab-binding
+    template:
+      ref: gitlab-trigger-pipeline
