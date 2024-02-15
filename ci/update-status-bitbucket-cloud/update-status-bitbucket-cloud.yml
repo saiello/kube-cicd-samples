@@ -1,0 +1,138 @@
+---
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: bitbucket-pipeline-status
+  labels:
+    app.kubernetes.io/version: "0.3"
+  annotations:
+    tekton.dev/pipelines.minVersion: "0.17.0"
+    tekton.dev/categories: Build Tools
+    tekton.dev/tags: build-tool
+    tekton.dev/platforms: "linux/amd64,linux/s390x,linux/ppc64le"
+spec:
+  description: >-
+    This Task can be used to update a bitbucket pipeline status
+
+  workspaces:
+    - name: bitbucket-token
+      description: A bitbucket token with api access
+  params:
+
+    - name: bitbucket-commit
+      description: The commit sha to be updated
+
+    - name: bitbucket-commit-url
+      description: The bitbucket commit url
+
+    - name: bitbucket-state
+      description: The bitbucket pipeline's state to set.
+
+    - name: bitbucket-state-update
+      description: Specify whether is an update of a previous status
+      default: 'false'
+
+    - name: ocp-base-url
+      default: tbc
+
+    - name: pipeline-name
+      description: tbc
+
+    - name: pipeline-run-name
+      description: tbc
+
+    - name: pipeline-run-namespace
+      description: tbc
+
+    - name: IMAGE
+      type: string
+      description: Base image
+      default: registry.access.redhat.com/ubi8/ubi-minimal:8.2
+
+  steps:
+    - name: bitbucket-pipeline-status
+      image: $(params.IMAGE)
+      env:
+        - name: PARAM_VERBOSE
+          value: "true"
+      script: |
+        #!/usr/bin/env bash
+
+        set -eu 
+
+        if [ "${PARAM_VERBOSE}" = "true" ] ; then
+          set -x
+        fi
+
+        # Mapping the tekton status to bitbucket state.
+        #
+        # Tekton
+        # ----
+        # Succeeded	all tasks have succeeded
+        # Failed	one ore more tasks failed
+        # Completed	all tasks completed successfully including one or more skipped tasks
+        # None
+
+        # bitbucket
+        # -----
+        # Build status. The build status state, one of: "SUCCESSFUL", "FAILED", "INPROGRESS", "CANCELLED", "UNKNOWN"
+        
+        #
+        # https://developer.atlassian.com/cloud/bitbucket/rest/api-group-commit-statuses/#api-repositories-workspace-repo-slug-commit-commit-statuses-build-key-put
+        # 
+        # https://tekton.dev/docs/pipelines/pipelines/#using-execution-status-of-pipelinetask
+        function get_bitbucket_state {
+
+          local input_state=$1
+
+          if [ $input_state = "Succeeded" ]; then
+            echo "SUCCESSFUL"
+          elif [ $input_state = "Completed" ]; then
+            echo "SUCCESSFUL"
+          elif [ $input_state = "Failed" ]; then
+            echo "FAILED"
+          else
+            # we are assuming the pipeline is still running
+            echo "INPROGRESS"
+          fi
+
+        }
+
+        
+    
+        # This task uses some tekton variables:
+        # - Context Variables. see: https://tekton.dev/docs/pipelines/variables/
+        # - Aggregate execution status. see: https://tekton.dev/docs/pipelines/pipelines/#using-aggregate-execution-status-of-all-tasks
+
+
+        # Collect variables
+        bitbucket_status_key=$(params.pipeline-name)
+
+        if [ "true" == "$(params.bitbucket-state-update)" ]; then
+          bitbucket_method=PUT
+          bitbucket_url=$(params.bitbucket-commit-url)${bitbucket_status_key}
+        else 
+          bitbucket_method=POST
+          bitbucket_url=$(params.bitbucket-commit-url)
+        fi
+
+        bitbucket_token=`cat $(workspaces.bitbucket-token.path)/token`
+
+        pipeline_run_url=$(params.ocp-base-url)/$(params.pipeline-run-namespace)/tekton.dev\~v1beta1\~PipelineRun/$(params.pipeline-run-name)
+        pipeline_state=$(get_bitbucket_state $(params.bitbucket-state))
+        # pipeline_task_description="foobar" # TBD
+
+        bitbucket_data="{ \"key\": \"${bitbucket_status_key}\", \"state\": \"${pipeline_state}\", \"url\": \"${pipeline_run_url}\" }"
+
+        # Compose curl command
+        # --url-query supported only since curl 7.87.0
+        bitbucket_curl_command="curl -k -v --request ${bitbucket_method} $bitbucket_url \
+            --header \"Authorization: Bearer $bitbucket_token\" \
+            --header \"Accept: application/json\" \
+            --header \"Content-Type: application/json\" \
+            --data '$bitbucket_data'"
+
+        echo $bitbucket_curl_command
+
+        # Eval curl command
+        eval $bitbucket_curl_command

@@ -1,0 +1,14 @@
+---
+apiVersion: triggers.tekton.dev/v1alpha1
+kind: TriggerBinding
+metadata:
+  name: bitbucket-binding
+spec:
+  # see: https://bitbucket.com/help/user/project/integrations/webhook_events.md#push-events
+  params:
+  
+  - name: git-repo-revision
+    value: $(body.push.changes[0].new.target.hash)
+
+  - name: bitbucket-commit-url
+    value: $(body.push.changes[0].new.target.links.self.href)

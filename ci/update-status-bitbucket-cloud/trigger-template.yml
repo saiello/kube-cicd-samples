@@ -1,0 +1,31 @@
+---
+apiVersion: triggers.tekton.dev/v1alpha1
+kind: TriggerTemplate
+metadata:
+  name: bitbucket-trigger-pipeline
+spec:
+  params:
+  - name: git-repo-revision
+  - name: bitbucket-commit-url
+  resourcetemplates:
+  - apiVersion: tekton.dev/v1beta1
+    kind: PipelineRun
+    metadata:
+      generateName: bitbucket-pipeline-run-
+    spec:
+      pipelineRef:
+        name: bitbucket-pipeline
+      workspaces:
+
+      - name: bitbucket-creds
+        secret:
+          secretName: bitbucket-api-token
+
+      params:
+      - name: ocp-base-url
+        value: ${OCP_BASE_URL}
+      - name: repo-revision 
+        value: $(tt.params.git-repo-revision)
+      - name: bitbucket-commit-url
+        value: $(tt.params.bitbucket-commit-url)
+

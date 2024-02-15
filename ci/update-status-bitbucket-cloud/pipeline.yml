@@ -1,0 +1,112 @@
+---
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: bitbucket-pipeline
+spec:
+  description: | 
+    This pipeline clones a git repo, then echoes the README file to the stdout.
+  # A list of parameters to be used by the Tasks in this Pipeline
+  params:
+
+  - name: ocp-base-url
+    type: string
+    description: |
+      Openshift base url used to compose the Tekton pipelineRun url
+
+
+  - name: repo-revision
+    type: string
+    description: |
+      The git commit sha to set the status to.
+
+
+  - name: bitbucket-commit-url
+    type: string
+    description: |
+      The bitbucket commit url to set the status. 
+
+
+  # A shared volume used by the Tasks to store the code
+  workspaces:
+    
+  - name: bitbucket-creds
+    description: | 
+      This workspace contains the token used to authenticate to bitbucket api.
+  
+  tasks:
+
+  - name: set-bitbucket-pipeline-running
+    taskRef:
+      name: bitbucket-pipeline-status
+    workspaces:
+    - name: bitbucket-token
+      workspace: bitbucket-creds
+    params:
+      - name: ocp-base-url
+        value: $(params.ocp-base-url)
+
+      - name: bitbucket-commit
+        value: $(params.repo-revision)
+
+      - name: bitbucket-commit-url
+        value: $(params.bitbucket-commit-url)
+      
+      - name: bitbucket-state
+        value: running
+      
+      - name: pipeline-name
+        value: "$(context.pipeline.name)"
+
+      - name: pipeline-run-name
+        value: "$(context.pipelineRun.name)" 
+
+      - name: pipeline-run-namespace
+        value: "$(context.pipelineRun.namespace)"
+
+
+  - name: dummy 
+    runAfter:
+      - "set-bitbucket-pipeline-running"
+    taskSpec:
+        steps:
+          - name: sleep
+            image: registry.redhat.io/ubi9/toolbox
+            script: |
+              echo "Execute pipeline"
+              sleep 20
+
+
+  finally:
+    - name: set-bitbucket-pipeline-final
+      taskRef:
+        name: bitbucket-pipeline-status
+      workspaces:
+        - name: bitbucket-token
+          workspace: bitbucket-creds    
+      params:
+        - name: ocp-base-url
+          value: $(params.ocp-base-url)
+
+        - name: bitbucket-commit
+          value: $(params.repo-revision)
+
+        - name: bitbucket-commit-url
+          value: $(params.bitbucket-commit-url)     
+      
+        - name: bitbucket-state
+          value: $(tasks.status)
+
+        - name: bitbucket-state-update
+          value: 'true'
+
+        - name: pipeline-name
+          value: "$(context.pipeline.name)"
+
+        - name: pipeline-run-name
+          value: "$(context.pipelineRun.name)" 
+
+        - name: pipeline-run-namespace
+          value: "$(context.pipelineRun.namespace)"           
+
+
