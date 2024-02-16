@@ -22,6 +22,7 @@ spec:
   - name: fetch-source
     taskRef:
       # A ClusterTask: use `tkn clustertask ls` to verify it is available
+      kind: ClusterTask
       name: git-clone
     workspaces:
       # Link the Task's workspace "output" to the Pipeline's workspace "shared-data"
